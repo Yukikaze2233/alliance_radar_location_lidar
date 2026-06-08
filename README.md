@@ -1,8 +1,8 @@
 # RADAR-LOCATION-LIDAR
 
-基于 **深圳市机智人科技** 纯固态面阵激光雷达 **WS_30PCD_ET3** 开发的激光雷达定位方案。
+基于纯固态 / 非重复扫描 / 融合式激光雷达的定位方案。
 
-> 后续将加入基于 **Livox Mid-70** 的定位支持。
+支持 **WS_30PCD_ET3**（机智人科技）、**Livox**（大疆创新 / Mid-70 / HAP / MID360）、**Odin**（留形科技）三种传感器。
 
 ---
 
@@ -54,22 +54,86 @@ ros2 launch foxglove_bridge foxglove_bridge_launch.xml port:=8765
 
 ---
 
-## WS_30PCD_ET3 开发资料
+## LiDAR 驱动
 
-### 产品手册
-- [产品手册](https://gitee.com/shenzhen-smart-people/product_manual.git)
+项目集成了三种激光雷达的 ROS2 驱动，位于 `lidar_ros_driver/` 目录。
 
-### 驱动包
-| 平台 | 地址 |
+### 1. WS_30PCD_ET3 — 深圳市机智人科技
+
+纯固态面阵激光雷达。
+
+```bash
+# 编译
+cd /workspace/lidar_ros_driver/ws_30pcd_et3_ros2
+colcon build --packages-select ws_30pcd_et3_ros2
+
+# RVIZ 显示
+ros2 run ws_30pcd_et3_ros2 main_node
+ros2 run rviz2 rviz2
+
+# 或通过 launch 启动
+ros2 launch ws_30pcd_et3_ros2 scan_frame.launch.py
+```
+
+| 资源 | 地址 |
 |------|------|
-| ROS | https://gitee.com/shenzhen-smart-people/ws_30pcd_et3_ros.git |
-| ROS2 | https://gitee.com/shenzhen-smart-people/ws_30pcd_et3_ros2.git |
-| Windows (VS2022) | https://gitee.com/shenzhen-smart-people/ws_30pcd_et3_win10.git |
-| Ubuntu (PCL) | https://gitee.com/shenzhen-smart-people/ws_30pcd_et3_pcl.git |
-| Ubuntu (Qt) | https://gitee.com/shenzhen-smart-people/ubuntu_qt_sdk.git |
+| 产品手册 | https://gitee.com/shenzhen-smart-people/product_manual.git |
+| 结构图纸 | https://gitee.com/shenzhen-smart-people/structural_drawings.git |
 
-### 结构图纸
-- [结构图纸](https://gitee.com/shenzhen-smart-people/structural_drawings.git)
+---
+
+### 2. Livox Mid-70 / HAP / MID360 — 大疆创新
+
+非重复扫描固态激光雷达。已集成 `livox_ros_driver2`，支持 Mid-70 / HAP / MID360 系列。
+
+```bash
+# 编译
+cd /workspace/lidar_ros_driver/livox_ros_driver2
+./build.sh humble
+
+# 启动（MID360 示例）
+ros2 launch livox_ros_driver2 rviz_MID360_launch.py
+
+# 启动（HAP 示例）
+ros2 launch livox_ros_driver2 rviz_HAP_launch.py
+```
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `publish_freq` | `10.0` | 点云发布频率（Hz），最大 100.0 |
+| `multi_topic` | `0` | 多雷达独立 topic：0=共用，1=独立 |
+| `xfer_format` | `0` | 点云格式：0=Livox 自定义，1=定制格式，2=标准 PCL |
+
+---
+
+### 3. Odin — 留形科技
+
+嵌入式视觉-激光雷达融合传感器，支持 Odometry / SLAM / 重定位三种模式。
+
+```bash
+# 编译
+cd /workspace/lidar_ros_driver/odin_ros_driver
+./script/build_ros2.sh
+
+# 启动
+ros2 launch odin_ros_driver odin1_ros2.launch.py
+```
+
+| Topic | 说明 |
+|-------|------|
+| `odin1/cloud_raw` | 原始点云 |
+| `odin1/cloud_render` | RGB 渲染点云 |
+| `odin1/cloud_slam` | SLAM 点云 |
+| `odin1/odometry` | 里程计 |
+| `odin1/image` | RGB 图像（bgr8） |
+
+| 模式 | `custom_map_mode` | 说明 |
+|------|-------------------|------|
+| Odometry | `0` | 纯里程计，map 与 odom 同姿 |
+| SLAM | `1` | 完整 SLAM（含回环检测和地图保存） |
+| 重定位 | `2` | 基于预建地图的重定位 |
+
+> 使用前需配置 Udev 规则，详见 `lidar_ros_driver/odin_ros_driver/README.md`。
 
 ---
 
