@@ -1,0 +1,95 @@
+# CodeRabbit AI Code Review Configuration
+# https://docs.coderabbit.ai
+
+language: "zh-CN"
+
+reviews:
+  profile: "assertive"
+  request_changes_workflow: true
+  high_level_summary: true
+  collapse_walkthrough: false
+  sequence_diagrams: true
+
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches: ["master", "main"]
+
+  path_instructions:
+    - path: "README.md"
+      instructions: |
+        Review the README for:
+        - Accuracy: do all commands work in the Docker container at /workspace?
+        - Completeness: are all scripts, drivers, and workflows documented?
+        - Structure: is the navigation logical for a new developer?
+        - Markdown linting: proper code fences, table alignment, link validity.
+
+    - path: "script/**"
+      instructions: |
+        Review shell scripts for:
+        - POSIX compatibility and bash best practices.
+        - Proper quoting, error handling (`set -euo pipefail`).
+        - PATH/source correctness inside the Docker container (/workspace paths).
+        - Suggest improvements for maintainability.
+
+    - path: "ros_ws/src/radar_localization_lidar/src/**/*.cpp"
+      instructions: |
+        Review C++ source files with these priorities:
+        1. C++23 modern features: use std::expected (already adopted), std::span,
+           std::format, std::ranges, std::mdspan, if consteval, deducing this.
+        2. ROS2 best practices: rclcpp lifecycle, parameter declaration,
+           QoS profiles, callback groups, executor selection.
+        3. Memory safety: prefer stack allocation, std::unique_ptr,
+           avoid raw new/delete; check PIMPL correctness.
+        4. Compile-time optimization opportunities: constexpr where possible,
+           static_assert for compile-time checks, template-if instead of runtime if.
+        5. Eigen usage: prefer Map over copy, check alignment with EIGEN_MAKE_ALIGNED_OPERATOR_NEW.
+        6. Error handling: use std::expected consistently, RCLCPP fallbacks.
+        7. Performance: reserve before loops, avoid unnecessary copies, prefer views.
+
+    - path: "ros_ws/src/radar_localization_lidar/src/**/*.hpp"
+      instructions: |
+        Review C++ header files with these priorities:
+        1. Forward declarations to minimize includes (especially in PIMPL pattern).
+        2. noexcept correctness on constructors, destructors, and getters.
+        3. [[nodiscard]] on all functions returning values that shouldn't be ignored.
+        4. const-correctness on member functions and parameters.
+        5. C++23: use std::expected for return types, explicit this parameters if useful.
+        6. Header guard consistency and include ordering.
+
+    - path: "ros_ws/src/radar_localization_lidar/CMakeLists.txt"
+      instructions: |
+        Review CMakeLists.txt for:
+        - Modern CMake practices (target_* instead of directory-level).
+        - Proper find_package and dependency handling.
+        - Build type separation: Release vs Debug flags correctness.
+        - Compile option propagation with generator expressions.
+        - ROS2 ament conventions compliance.
+
+    - path: "ros_ws/src/radar_localization_lidar/config/**/*.yaml"
+      instructions: |
+        Review YAML config files for:
+        - Schema consistency: are all fields documented?
+        - Default values: are they sensible for production?
+        - Validate sensor extrinsic/intrinsic naming conventions.
+
+  path_filters:
+    - "!ros_ws/build/**"
+    - "!ros_ws/install/**"
+    - "!ros_ws/log/**"
+    - "!ros_ws/third-party/**"
+    - "!lidar_ros_driver/**"
+    - "!docs/**"
+    - "!.vscode/**"
+
+chat:
+  auto_reply: true
+
+knowledge:
+  languages:
+    - cpp
+    - cmake
+    - python
+    - shell
+    - yaml
+    - markdown
