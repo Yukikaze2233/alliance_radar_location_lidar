@@ -1,6 +1,24 @@
 FROM ghcr.io/harrypotter1tech/harryh_radar:latest
 
 # =============================================================================
+# [0/7] 国内网络优化：替换 apt 源为 tuna 镜像
+# =============================================================================
+RUN echo "" && \
+    echo "========================================" && \
+    echo "[0/7] apt 源切换为 tuna 镜像" && \
+    echo "========================================" && \
+    echo "  → 替换 ubuntu 源..." && \
+    sed -i 's|http://archive.ubuntu.com|https://mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list && \
+    sed -i 's|http://security.ubuntu.com|https://mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list && \
+    echo "  → 替换 ROS2 源..." && \
+    for f in /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do \
+      [ -f "$f" ] && sed -i 's|http://packages.ros.org|https://mirrors.tuna.tsinghua.edu.cn/ros2|g' "$f"; \
+    done && \
+    echo "  → apt-get update..." && \
+    apt-get update && \
+    echo "  [OK] apt 源已切换为 tuna 镜像"
+
+# =============================================================================
 # RADAR-LOCATION-LIDAR 编译环境镜像
 #
 # 用法:
@@ -23,7 +41,6 @@ RUN echo "" && \
     echo "[1/7] 安装 GCC 13 (C++23 编译器)" && \
     echo "========================================" && \
     echo "  → 安装 add-apt-repository..." && \
-    apt-get update && \
     apt-get install -y --no-install-recommends software-properties-common && \
     echo "  → 添加 ubuntu-toolchain-r/test PPA..." && \
     add-apt-repository -y ppa:ubuntu-toolchain-r/test && \
