@@ -22,8 +22,7 @@ public:
             return std::unexpected("Missing Model section");
         }
 
-        if (const auto map_node = model_node["map_path"];
-            map_node.IsDefined()) {
+        if (const auto map_node = model_node["map_path"]; map_node.IsDefined()) {
             if (!map_node.IsScalar()) {
                 return std::unexpected("Model.map_path must be a string");
             }

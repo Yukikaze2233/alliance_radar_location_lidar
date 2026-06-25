@@ -126,9 +126,8 @@ LidarPipeline::LidarPipeline()
     pub_pose_ =
         this->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>("/lidar/pose", 10);
     pub_diag_ = this->create_publisher<diagnostic_msgs::msg::DiagnosticStatus>("/diagnostics", 10);
-    pub_dynamic_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/lidar/dynamic", 10);
-    pub_clusters_ =
-        this->create_publisher<sensor_msgs::msg::PointCloud2>("/lidar/cluster", 10);
+    pub_dynamic_  = this->create_publisher<sensor_msgs::msg::PointCloud2>("/lidar/dynamic", 10);
+    pub_clusters_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/lidar/cluster", 10);
     pub_cluster_viz_ =
         this->create_publisher<visualization_msgs::msg::MarkerArray>("/lidar/cluster_viz", 10);
 
@@ -276,10 +275,8 @@ void LidarPipeline::publish_clusters(
     pcl::PointCloud<pcl::PointXYZ>::Ptr centroids(new pcl::PointCloud<pcl::PointXYZ>());
     centroids->reserve(clusters.size());
     for (const auto& c : clusters) {
-        centroids->emplace_back(
-            static_cast<float>(c.centroid.x()),
-            static_cast<float>(c.centroid.y()),
-            static_cast<float>(c.centroid.z()));
+        centroids->emplace_back(static_cast<float>(c.centroid.x()),
+            static_cast<float>(c.centroid.y()), static_cast<float>(c.centroid.z()));
     }
     centroids->width    = centroids->size();
     centroids->height   = 1;
