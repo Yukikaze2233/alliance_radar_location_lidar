@@ -1,8 +1,8 @@
 #include "radar_fusion/fusion_node.hpp"
 
-#include <pcl_conversions/pcl_conversions.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
+#include <pcl_conversions/pcl_conversions.h>
 
 #include <algorithm>
 #include <cmath>
@@ -23,17 +23,15 @@ FusionNode::FusionNode()
     cfg_.max_tracks          = this->get_parameter("max_tracks").as_int();
     tracks_.reserve(static_cast<std::size_t>(cfg_.max_tracks));
 
-    sub_cluster_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
-        "/lidar/cluster", 10,
+    sub_cluster_ = this->create_subscription<sensor_msgs::msg::PointCloud2>("/lidar/cluster", 10,
         [this](const sensor_msgs::msg::PointCloud2::SharedPtr msg) { on_cluster(msg); });
 
-    pub_tracks_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(
-        "/fusion/tracks", 10);
-    pub_pose_ = this->create_publisher<geometry_msgs::msg::PoseStamped>(
-        "/localization/pose", 10);
+    pub_tracks_ =
+        this->create_publisher<visualization_msgs::msg::MarkerArray>("/fusion/tracks", 10);
+    pub_pose_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("/localization/pose", 10);
 
-    RCLCPP_INFO(get_logger(), "radar_fusion ready. gate=%.1fm timeout=%.1fs",
-        cfg_.gate_distance, cfg_.track_timeout_sec);
+    RCLCPP_INFO(get_logger(), "radar_fusion ready. gate=%.1fm timeout=%.1fs", cfg_.gate_distance,
+        cfg_.track_timeout_sec);
 }
 
 void FusionNode::on_cluster(const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
@@ -62,13 +60,13 @@ void FusionNode::on_cluster(const sensor_msgs::msg::PointCloud2::SharedPtr msg) 
 
     for (size_t i = 0; i < tracks_.size(); ++i) {
         double min_dist_sq = gate_distance_sq;
-        int    min_idx  = -1;
+        int min_idx        = -1;
         for (size_t j = 0; j < measurements.size(); ++j) {
             if (matched_meas[j]) continue;
             const double d_sq = tracks_[i].distance_squared_to(measurements[j]);
             if (d_sq < min_dist_sq) {
                 min_dist_sq = d_sq;
-                min_idx  = static_cast<int>(j);
+                min_idx     = static_cast<int>(j);
             }
         }
 
@@ -91,9 +89,7 @@ void FusionNode::on_cluster(const sensor_msgs::msg::PointCloud2::SharedPtr msg) 
     // 4. 删除超时轨迹
     tracks_.erase(
         std::remove_if(tracks_.begin(), tracks_.end(),
-            [&](const KalmanTracker& t) {
-                return t.state().is_stale(cfg_.track_timeout_sec);
-            }),
+            [&](const KalmanTracker& t) { return t.state().is_stale(cfg_.track_timeout_sec); }),
         tracks_.end());
 
     // 5. 发布
@@ -102,8 +98,8 @@ void FusionNode::on_cluster(const sensor_msgs::msg::PointCloud2::SharedPtr msg) 
     publish_pose(stamp);
 }
 
-void FusionNode::publish_tracks(const std::vector<KalmanTracker>& tracks,
-                                 const rclcpp::Time& stamp) {
+void FusionNode::publish_tracks(
+    const std::vector<KalmanTracker>& tracks, const rclcpp::Time& stamp) {
     visualization_msgs::msg::MarkerArray markers;
 
     for (size_t i = 0; i < tracks.size(); ++i) {
@@ -119,9 +115,9 @@ void FusionNode::publish_tracks(const std::vector<KalmanTracker>& tracks,
         m.type            = visualization_msgs::msg::Marker::SPHERE;
         m.action          = visualization_msgs::msg::Marker::ADD;
 
-        m.pose.position.x = s.x(0);
-        m.pose.position.y = s.x(1);
-        m.pose.position.z = 0.5;
+        m.pose.position.x    = s.x(0);
+        m.pose.position.y    = s.x(1);
+        m.pose.position.z    = 0.5;
         m.pose.orientation.w = 1.0;
 
         m.scale.x = 0.3;
@@ -129,12 +125,15 @@ void FusionNode::publish_tracks(const std::vector<KalmanTracker>& tracks,
         m.scale.z = 0.3;
 
         // 颜色：confirmed=绿色，颜色根据 color 字段
-        if (s.color == 0) {       // blue
-            m.color.b = 1.0f; m.color.a = 0.8f;
+        if (s.color == 0) { // blue
+            m.color.b = 1.0f;
+            m.color.a = 0.8f;
         } else if (s.color == 2) { // red
-            m.color.r = 1.0f; m.color.a = 0.8f;
+            m.color.r = 1.0f;
+            m.color.a = 0.8f;
         } else {
-            m.color.g = 1.0f; m.color.a = 0.8f;
+            m.color.g = 1.0f;
+            m.color.a = 0.8f;
         }
 
         m.lifetime = rclcpp::Duration::from_seconds(0.5);
@@ -150,18 +149,20 @@ void FusionNode::publish_tracks(const std::vector<KalmanTracker>& tracks,
         arrow.action          = visualization_msgs::msg::Marker::ADD;
 
         geometry_msgs::msg::Point start, end;
-        start.x = s.x(0); start.y = s.x(1); start.z = 0.5;
-        end.x   = s.x(0) + s.x(2) * 0.5;
-        end.y   = s.x(1) + s.x(3) * 0.5;
-        end.z   = 0.5;
-        arrow.points = {start, end};
+        start.x      = s.x(0);
+        start.y      = s.x(1);
+        start.z      = 0.5;
+        end.x        = s.x(0) + s.x(2) * 0.5;
+        end.y        = s.x(1) + s.x(3) * 0.5;
+        end.z        = 0.5;
+        arrow.points = { start, end };
 
         arrow.scale.x = 0.05;
         arrow.scale.y = 0.1;
         arrow.scale.z = 0.1;
 
-        arrow.color.r = 1.0f;
-        arrow.color.a = 0.6f;
+        arrow.color.r  = 1.0f;
+        arrow.color.a  = 0.6f;
         arrow.lifetime = rclcpp::Duration::from_seconds(0.5);
         markers.markers.push_back(arrow);
 
@@ -174,15 +175,17 @@ void FusionNode::publish_tracks(const std::vector<KalmanTracker>& tracks,
         text.type            = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
         text.action          = visualization_msgs::msg::Marker::ADD;
 
-        text.pose.position.x = s.x(0);
-        text.pose.position.y = s.x(1);
-        text.pose.position.z = 1.0;
+        text.pose.position.x    = s.x(0);
+        text.pose.position.y    = s.x(1);
+        text.pose.position.z    = 1.0;
         text.pose.orientation.w = 1.0;
 
-        text.scale.z = 0.3;
-        text.color.r = 1.0f; text.color.g = 1.0f; text.color.b = 1.0f;
-        text.color.a = 1.0f;
-        text.text = std::to_string(s.track_id);
+        text.scale.z  = 0.3;
+        text.color.r  = 1.0f;
+        text.color.g  = 1.0f;
+        text.color.b  = 1.0f;
+        text.color.a  = 1.0f;
+        text.text     = std::to_string(s.track_id);
         text.lifetime = rclcpp::Duration::from_seconds(0.5);
         markers.markers.push_back(text);
     }
@@ -194,8 +197,8 @@ void FusionNode::publish_pose(const rclcpp::Time& stamp) {
     // Phase 1: 单输入透传（只有 LiDAR 定位结果，没有融合）
     // 后续 Phase 会在这里融合 LiDAR + camera
     geometry_msgs::msg::PoseStamped pose;
-    pose.header.stamp    = stamp;
-    pose.header.frame_id = "map";
+    pose.header.stamp       = stamp;
+    pose.header.frame_id    = "map";
     pose.pose.orientation.w = 1.0;
     pub_pose_->publish(pose);
 }

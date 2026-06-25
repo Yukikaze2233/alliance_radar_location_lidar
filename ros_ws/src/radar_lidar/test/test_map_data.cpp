@@ -14,10 +14,10 @@ namespace {
 // 生成一个临时 PCD 文件用于测试
 std::string make_test_pcd(const std::string& path, int n_points, float spacing = 0.2f) {
     pcl::PointCloud<pcl::PointXYZ> cloud;
-    cloud.width = n_points;
-    cloud.height = 1;
+    cloud.width    = n_points;
+    cloud.height   = 1;
     cloud.is_dense = true;
-    int side = static_cast<int>(std::sqrt(static_cast<float>(n_points)));
+    int side       = static_cast<int>(std::sqrt(static_cast<float>(n_points)));
     for (int i = 0; i < side; ++i) {
         for (int j = 0; j < side; ++j) {
             cloud.emplace_back(i * spacing, j * spacing, 0.0f);
@@ -34,9 +34,7 @@ protected:
         test_pcd_ = "/tmp/radar_test_map.pcd";
         make_test_pcd(test_pcd_, 100, 0.2f);
     }
-    void TearDown() override {
-        std::filesystem::remove(test_pcd_);
-    }
+    void TearDown() override { std::filesystem::remove(test_pcd_); }
     std::string test_pcd_;
 };
 

@@ -20,8 +20,8 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr make_wall(int nx, int ny, float step) {
             cloud->emplace_back(i * step, j * step, 0.0f);
         }
     }
-    cloud->width = cloud->size();
-    cloud->height = 1;
+    cloud->width    = cloud->size();
+    cloud->height   = 1;
     cloud->is_dense = true;
     return cloud;
 }
@@ -44,9 +44,9 @@ TEST(DynamicCloudTest, ExtractsObstacleFromWall) {
 
     radar::DynamicCloudConfig cfg;
     cfg.distance_threshold = 0.1f;
-    cfg.num_threads = 2;
-    cfg.accumulate_frames = 0;  // 不累积，单帧测试
-    cfg.use_roi = false;
+    cfg.num_threads        = 2;
+    cfg.accumulate_frames  = 0; // 不累积，单帧测试
+    cfg.use_roi            = false;
 
     radar::DynamicCloudStage stage(cfg);
     stage.set_map(map);
@@ -98,8 +98,8 @@ TEST(ClusterTest, SingleCluster) {
 
     radar::ClusterConfig cfg;
     cfg.cluster_tolerance = 0.25f;
-    cfg.min_cluster_size = 5;
-    cfg.max_cluster_size = 1000;
+    cfg.min_cluster_size  = 5;
+    cfg.max_cluster_size  = 1000;
 
     radar::ClusterStage stage(cfg);
     auto result = stage.process(points);
@@ -108,7 +108,7 @@ TEST(ClusterTest, SingleCluster) {
 
     const auto& cluster = (*result)[0];
     EXPECT_EQ(cluster.point_count, 10);
-    EXPECT_NEAR(cluster.centroid.x(), 1.225, 0.1);  // 中心约 1.0~1.45
+    EXPECT_NEAR(cluster.centroid.x(), 1.225, 0.1); // 中心约 1.0~1.45
     EXPECT_NEAR(cluster.centroid.y(), 2.0, 0.1);
     EXPECT_NEAR(cluster.centroid.z(), 3.0, 0.1);
 
@@ -131,8 +131,8 @@ TEST(ClusterTest, TwoClusters) {
 
     radar::ClusterConfig cfg;
     cfg.cluster_tolerance = 0.25f;
-    cfg.min_cluster_size = 5;
-    cfg.max_cluster_size = 1000;
+    cfg.min_cluster_size  = 5;
+    cfg.max_cluster_size  = 1000;
 
     radar::ClusterStage stage(cfg);
     auto result = stage.process(points);
@@ -158,8 +158,8 @@ TEST(ClusterTest, TooFewPointsFiltered) {
     points.emplace_back(0.2, 0, 0);
 
     radar::ClusterConfig cfg;
-    cfg.min_cluster_size = 5;
-    cfg.max_cluster_size = 1000;
+    cfg.min_cluster_size  = 5;
+    cfg.max_cluster_size  = 1000;
     cfg.cluster_tolerance = 0.25f;
 
     radar::ClusterStage stage(cfg);

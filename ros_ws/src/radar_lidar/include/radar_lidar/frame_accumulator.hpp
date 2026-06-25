@@ -13,7 +13,7 @@ class FrameAccumulator {
 public:
     /// @param window_size 滑动窗口大小（帧数），默认 20
     explicit FrameAccumulator(size_t window_size = 20)
-        : window_size_(window_size) {}
+        : window_size_(window_size) { }
 
     /// @brief 添加一帧，超过窗口大小自动弹出最旧帧
     void push(types::PointCloud points);

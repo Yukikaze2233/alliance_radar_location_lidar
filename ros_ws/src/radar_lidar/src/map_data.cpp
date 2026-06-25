@@ -37,9 +37,9 @@ auto MapData::Load(const std::string& pcd_path, double voxel_leaf_size)
     }
 
     // 4. 构建 small_gicp 点云和 KD-tree
-    auto sgicp_cloud = std::make_shared<SGicpCloud>(points);
+    auto sgicp_cloud         = std::make_shared<SGicpCloud>(points);
     const auto build_threads = std::max(1u, std::thread::hardware_concurrency());
-    auto sgicp_tree  = std::make_shared<SGicpTree>(
+    auto sgicp_tree          = std::make_shared<SGicpTree>(
         sgicp_cloud, small_gicp::KdTreeBuilderOMP(static_cast<int>(build_threads)));
 
     // 5. 构建 PCL KD-tree

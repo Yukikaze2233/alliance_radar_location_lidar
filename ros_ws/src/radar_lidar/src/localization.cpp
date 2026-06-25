@@ -31,9 +31,8 @@ auto LocalizationStage::preprocess(const types::Frame& scan) -> types::PointClou
     if (cfg_.use_roi) {
         roi_points.reserve(scan.points.size());
         for (const auto& p : scan.points) {
-            if (p.x() >= cfg_.roi_x_min && p.x() <= cfg_.roi_x_max
-                && p.y() >= cfg_.roi_y_min && p.y() <= cfg_.roi_y_max
-                && p.z() >= cfg_.roi_z_min && p.z() <= cfg_.roi_z_max) {
+            if (p.x() >= cfg_.roi_x_min && p.x() <= cfg_.roi_x_max && p.y() >= cfg_.roi_y_min
+                && p.y() <= cfg_.roi_y_max && p.z() >= cfg_.roi_z_min && p.z() <= cfg_.roi_z_max) {
                 roi_points.push_back(p);
             }
         }
@@ -91,8 +90,8 @@ auto LocalizationStage::process(const types::Frame& scan)
     // 预处理（球面网格 + 帧累积 + ROI）
     auto source_points = preprocess(scan);
     if (source_points.size() < 50) {
-        return std::unexpected("Too few points after preprocessing: "
-            + std::to_string(source_points.size()));
+        return std::unexpected(
+            "Too few points after preprocessing: " + std::to_string(source_points.size()));
     }
 
     // small_gicp 配置
@@ -125,7 +124,7 @@ auto LocalizationStage::process(const types::Frame& scan)
     out.converged     = true;
 
     Eigen::Matrix<double, 6, 6> H_reg = result.H + Eigen::Matrix<double, 6, 6>::Identity() * 1e-6;
-    out.covariance = H_reg.ldlt().solve(Eigen::Matrix<double, 6, 6>::Identity());
+    out.covariance                    = H_reg.ldlt().solve(Eigen::Matrix<double, 6, 6>::Identity());
 
     return out;
 }

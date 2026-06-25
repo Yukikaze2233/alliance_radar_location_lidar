@@ -23,17 +23,17 @@ namespace {
 struct Args {
     std::string map_path;
     std::string scan_path;
-    double voxel_leaf     = 0.1;
-    double max_corr       = 1.0;
-    int    max_iter       = 48;
-    int    num_threads    = 4;
-    double init_x         = 0.0;
-    double init_y         = 0.0;
-    double init_z         = 0.0;
-    double init_yaw_deg   = 0.0;
-    std::string output_pcd  = "aligned.pcd";
-    std::string pose_out    = "pose.json";
-    bool   verbose        = false;
+    double voxel_leaf      = 0.1;
+    double max_corr        = 1.0;
+    int max_iter           = 48;
+    int num_threads        = 4;
+    double init_x          = 0.0;
+    double init_y          = 0.0;
+    double init_z          = 0.0;
+    double init_yaw_deg    = 0.0;
+    std::string output_pcd = "aligned.pcd";
+    std::string pose_out   = "pose.json";
+    bool verbose           = false;
 };
 
 auto parse_args(int argc, char** argv) -> Args {
@@ -58,25 +58,28 @@ auto parse_args(int argc, char** argv) -> Args {
 
     for (int i = 3; i < argc; ++i) {
         std::string arg = argv[i];
-        if (arg == "--voxel" && i + 1 < argc)         args.voxel_leaf = std::stod(argv[++i]);
+        if (arg == "--voxel" && i + 1 < argc) args.voxel_leaf = std::stod(argv[++i]);
         else if (arg == "--max-corr" && i + 1 < argc) args.max_corr = std::stod(argv[++i]);
         else if (arg == "--max-iter" && i + 1 < argc) args.max_iter = std::stoi(argv[++i]);
         else if (arg == "--num-threads" && i + 1 < argc) args.num_threads = std::stoi(argv[++i]);
-        else if (arg == "--init-x" && i + 1 < argc)   args.init_x = std::stod(argv[++i]);
-        else if (arg == "--init-y" && i + 1 < argc)   args.init_y = std::stod(argv[++i]);
-        else if (arg == "--init-z" && i + 1 < argc)   args.init_z = std::stod(argv[++i]);
+        else if (arg == "--init-x" && i + 1 < argc) args.init_x = std::stod(argv[++i]);
+        else if (arg == "--init-y" && i + 1 < argc) args.init_y = std::stod(argv[++i]);
+        else if (arg == "--init-z" && i + 1 < argc) args.init_z = std::stod(argv[++i]);
         else if (arg == "--init-yaw" && i + 1 < argc) args.init_yaw_deg = std::stod(argv[++i]);
-        else if (arg == "--output" && i + 1 < argc)   args.output_pcd = argv[++i];
+        else if (arg == "--output" && i + 1 < argc) args.output_pcd = argv[++i];
         else if (arg == "--pose-out" && i + 1 < argc) args.pose_out = argv[++i];
-        else if (arg == "--verbose")                  args.verbose = true;
-        else { std::cerr << "Unknown argument: " << arg << "\n"; std::exit(1); }
+        else if (arg == "--verbose") args.verbose = true;
+        else {
+            std::cerr << "Unknown argument: " << arg << "\n";
+            std::exit(1);
+        }
     }
     return args;
 }
 
 void write_pose_json(const std::string& path, const radar::types::PoseEstimate& pose) {
-    const auto& T = pose.T;
-    const auto  trans = T.translation();
+    const auto& T    = pose.T;
+    const auto trans = T.translation();
     const Eigen::Quaterniond q(T.rotation());
 
     std::ofstream f(path);
@@ -85,8 +88,8 @@ void write_pose_json(const std::string& path, const radar::types::PoseEstimate& 
     f << "  \"converged\": " << (pose.converged ? "true" : "false") << ",\n";
     f << "  \"fitness_score\": " << pose.fitness_score << ",\n";
     f << "  \"translation\": [" << trans.x() << ", " << trans.y() << ", " << trans.z() << "],\n";
-    f << "  \"rotation_quaternion\": ["
-      << q.x() << ", " << q.y() << ", " << q.z() << ", " << q.w() << "],\n";
+    f << "  \"rotation_quaternion\": [" << q.x() << ", " << q.y() << ", " << q.z() << ", " << q.w()
+      << "],\n";
     f << "  \"rotation_euler_xyz_deg\": ["
       << q.toRotationMatrix().eulerAngles(0, 1, 2).x() * 180.0 / M_PI << ", "
       << q.toRotationMatrix().eulerAngles(0, 1, 2).y() * 180.0 / M_PI << ", "
@@ -138,10 +141,12 @@ int main(int argc, char** argv) {
             frame.points.emplace_back(pt.x, pt.y, pt.z);
         }
     }
-    std::cout << "[registration_tool] Scan loaded: " << frame.points.size() << " points" << std::endl;
+    std::cout << "[registration_tool] Scan loaded: " << frame.points.size() << " points"
+              << std::endl;
 
     if (frame.points.size() < 100) {
-        std::cerr << "[registration_tool] ERROR: Too few scan points: " << frame.points.size() << std::endl;
+        std::cerr << "[registration_tool] ERROR: Too few scan points: " << frame.points.size()
+                  << std::endl;
         return 1;
     }
 
@@ -156,15 +161,17 @@ int main(int argc, char** argv) {
     // 如果给了初始位姿，通过 set_initial_pose 传入
     auto localization = radar::LocalizationStage(map, cfg);
 
-    if (args.init_x != 0.0 || args.init_y != 0.0 || args.init_z != 0.0 || args.init_yaw_deg != 0.0) {
+    if (args.init_x != 0.0 || args.init_y != 0.0 || args.init_z != 0.0
+        || args.init_yaw_deg != 0.0) {
         Eigen::Isometry3d init_pose = Eigen::Isometry3d::Identity();
-        init_pose.translation() = Eigen::Vector3d(args.init_x, args.init_y, args.init_z);
-        double yaw_rad = args.init_yaw_deg * M_PI / 180.0;
-        init_pose.linear() = (Eigen::AngleAxisd(yaw_rad, Eigen::Vector3d::UnitZ())).toRotationMatrix();
+        init_pose.translation()     = Eigen::Vector3d(args.init_x, args.init_y, args.init_z);
+        double yaw_rad              = args.init_yaw_deg * M_PI / 180.0;
+        init_pose.linear() =
+            (Eigen::AngleAxisd(yaw_rad, Eigen::Vector3d::UnitZ())).toRotationMatrix();
         localization.set_initial_pose(init_pose);
         std::cout << "[registration_tool] Initial pose set: x=" << args.init_x
-                  << " y=" << args.init_y << " z=" << args.init_z
-                  << " yaw=" << args.init_yaw_deg << "deg" << std::endl;
+                  << " y=" << args.init_y << " z=" << args.init_z << " yaw=" << args.init_yaw_deg
+                  << "deg" << std::endl;
     }
 
     std::cout << "[registration_tool] Running GICP..." << std::endl;
@@ -176,15 +183,17 @@ int main(int argc, char** argv) {
     }
 
     const auto& pose = *result;
-    const auto& T = pose.T;
-    const auto  trans = T.translation();
+    const auto& T    = pose.T;
+    const auto trans = T.translation();
     const Eigen::Quaterniond q(T.rotation());
 
     std::cout << "[registration_tool] === Result ===" << std::endl;
     std::cout << "  converged:      " << (pose.converged ? "true" : "false") << std::endl;
     std::cout << "  fitness_score:  " << pose.fitness_score << std::endl;
-    std::cout << "  translation:    [" << trans.x() << ", " << trans.y() << ", " << trans.z() << "]" << std::endl;
-    std::cout << "  quaternion:     [" << q.x() << ", " << q.y() << ", " << q.z() << ", " << q.w() << "]" << std::endl;
+    std::cout << "  translation:    [" << trans.x() << ", " << trans.y() << ", " << trans.z() << "]"
+              << std::endl;
+    std::cout << "  quaternion:     [" << q.x() << ", " << q.y() << ", " << q.z() << ", " << q.w()
+              << "]" << std::endl;
 
     // ── 4. 写位姿 JSON ───────────────────────────────────────────
     write_pose_json(args.pose_out, pose);
@@ -197,7 +206,9 @@ int main(int argc, char** argv) {
     // 地图点 intensity=0
     for (const auto& pt : map->pcl_cloud().points) {
         pcl::PointXYZI p;
-        p.x = pt.x; p.y = pt.y; p.z = pt.z;
+        p.x         = pt.x;
+        p.y         = pt.y;
+        p.z         = pt.z;
         p.intensity = 0.0f;
         merged->push_back(p);
     }
@@ -206,13 +217,15 @@ int main(int argc, char** argv) {
     for (const auto& pt : frame.points) {
         Eigen::Vector3d transformed = T * pt;
         pcl::PointXYZI p;
-        p.x = transformed.x(); p.y = transformed.y(); p.z = transformed.z();
+        p.x         = transformed.x();
+        p.y         = transformed.y();
+        p.z         = transformed.z();
         p.intensity = 1.0f;
         merged->push_back(p);
     }
 
-    merged->width = merged->size();
-    merged->height = 1;
+    merged->width    = merged->size();
+    merged->height   = 1;
     merged->is_dense = true;
 
     if (pcl::io::savePCDFileBinary(args.output_pcd, *merged) != 0) {
@@ -220,8 +233,8 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    std::cout << "[registration_tool] Aligned PCD written: " << args.output_pcd
-              << " (" << merged->size() << " points, intensity 0=map 1=scan)" << std::endl;
+    std::cout << "[registration_tool] Aligned PCD written: " << args.output_pcd << " ("
+              << merged->size() << " points, intensity 0=map 1=scan)" << std::endl;
 
     return 0;
 }

@@ -11,20 +11,20 @@
 namespace radar {
 
 struct ClusterConfig {
-    float cluster_tolerance = 0.25f;  // 欧氏聚类距离阈值
-    int   min_cluster_size  = 5;
-    int   max_cluster_size  = 1000;
+    float cluster_tolerance = 0.25f; // 欧氏聚类距离阈值
+    int min_cluster_size    = 5;
+    int max_cluster_size    = 1000;
 };
 
 struct ClusterResult {
-    Eigen::Vector3d centroid  { 0, 0, 0 };
-    Eigen::Vector3d min_bound { 0, 0, 0 };  // AABB min
-    Eigen::Vector3d max_bound { 0, 0, 0 };  // AABB max
-    int             point_count = 0;
+    Eigen::Vector3d centroid { 0, 0, 0 };
+    Eigen::Vector3d min_bound { 0, 0, 0 }; // AABB min
+    Eigen::Vector3d max_bound { 0, 0, 0 }; // AABB max
+    int point_count = 0;
 };
 
 /// @brief 欧氏聚类 + 质心 + AABB 边界框
-    /// 输出质心 + AABB 边界框
+/// 输出质心 + AABB 边界框
 class ClusterStage {
 public:
     explicit ClusterStage(ClusterConfig cfg);

@@ -27,13 +27,14 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr make_cube_surface(float size, float step) {
             cloud->emplace_back(half, x, y);
         }
     }
-    cloud->width = cloud->size();
-    cloud->height = 1;
+    cloud->width    = cloud->size();
+    cloud->height   = 1;
     cloud->is_dense = true;
     return cloud;
 }
 
-std::string save_temp_pcd(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, const std::string& path) {
+std::string save_temp_pcd(
+    const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, const std::string& path) {
     pcl::io::savePCDFileBinary(path, *cloud);
     return path;
 }
@@ -46,9 +47,7 @@ protected:
         auto cube = make_cube_surface(2.0f, 0.1f);
         save_temp_pcd(cube, map_pcd_);
     }
-    void TearDown() override {
-        std::filesystem::remove(map_pcd_);
-    }
+    void TearDown() override { std::filesystem::remove(map_pcd_); }
     std::string map_pcd_;
 };
 
@@ -61,11 +60,11 @@ TEST_F(LocalizationTest, IdentityTransform) {
     auto map = *map_result;
 
     radar::config::LocalizationConfig cfg;
-    cfg.num_threads = 2;
-    cfg.max_iterations = 50;
-    cfg.max_corr_distance = 1.0;
+    cfg.num_threads        = 2;
+    cfg.max_iterations     = 50;
+    cfg.max_corr_distance  = 1.0;
     cfg.use_spherical_grid = false;
-    cfg.accumulate_frames = 0;
+    cfg.accumulate_frames  = 0;
 
     auto localization = radar::LocalizationStage(map, cfg);
 
@@ -79,7 +78,7 @@ TEST_F(LocalizationTest, IdentityTransform) {
     ASSERT_TRUE(result.has_value()) << result.error();
 
     const auto& T = result->T;
-    auto trans = T.translation();
+    auto trans    = T.translation();
     EXPECT_NEAR(trans.x(), 0.0, 0.05);
     EXPECT_NEAR(trans.y(), 0.0, 0.05);
     EXPECT_NEAR(trans.z(), 0.0, 0.05);
@@ -94,16 +93,16 @@ TEST_F(LocalizationTest, KnownTranslation) {
     auto map = *map_result;
 
     radar::config::LocalizationConfig cfg;
-    cfg.num_threads = 2;
-    cfg.max_iterations = 100;
-    cfg.max_corr_distance = 2.0;
+    cfg.num_threads        = 2;
+    cfg.max_iterations     = 100;
+    cfg.max_corr_distance  = 2.0;
     cfg.use_spherical_grid = false;
-    cfg.accumulate_frames = 0;
+    cfg.accumulate_frames  = 0;
 
     auto localization = radar::LocalizationStage(map, cfg);
 
     Eigen::Isometry3d init_pose = Eigen::Isometry3d::Identity();
-    init_pose.translation() = Eigen::Vector3d(-0.5, -0.3, 0.0);
+    init_pose.translation()     = Eigen::Vector3d(-0.5, -0.3, 0.0);
     localization.set_initial_pose(init_pose);
 
     // 施加平移得到扫描点
@@ -119,7 +118,7 @@ TEST_F(LocalizationTest, KnownTranslation) {
     auto trans = result->T.translation();
     EXPECT_NEAR(trans.x(), -0.5, 0.1) << "Expected T.x ≈ -0.5, got " << trans.x();
     EXPECT_NEAR(trans.y(), -0.3, 0.1) << "Expected T.y ≈ -0.3, got " << trans.y();
-    EXPECT_NEAR(trans.z(), 0.0, 0.1)  << "Expected T.z ≈ 0.0, got " << trans.z();
+    EXPECT_NEAR(trans.z(), 0.0, 0.1) << "Expected T.z ≈ 0.0, got " << trans.z();
     EXPECT_TRUE(result->converged);
 }
 
@@ -131,22 +130,22 @@ TEST_F(LocalizationTest, KnownRotation) {
     auto map = *map_result;
 
     radar::config::LocalizationConfig cfg;
-    cfg.num_threads = 2;
-    cfg.max_iterations = 100;
-    cfg.max_corr_distance = 2.0;
+    cfg.num_threads        = 2;
+    cfg.max_iterations     = 100;
+    cfg.max_corr_distance  = 2.0;
     cfg.use_spherical_grid = false;
-    cfg.accumulate_frames = 0;
+    cfg.accumulate_frames  = 0;
 
     auto localization = radar::LocalizationStage(map, cfg);
 
     // 初始位姿给 -15 度帮助收敛
     Eigen::Isometry3d init_pose = Eigen::Isometry3d::Identity();
-    double angle = -15.0 * M_PI / 180.0;
+    double angle                = -15.0 * M_PI / 180.0;
     init_pose.linear() = Eigen::AngleAxisd(angle, Eigen::Vector3d::UnitZ()).toRotationMatrix();
     localization.set_initial_pose(init_pose);
 
     // 施加 +15 度旋转得到扫描
-    double rot_rad = 15.0 * M_PI / 180.0;
+    double rot_rad    = 15.0 * M_PI / 180.0;
     Eigen::Matrix3d R = Eigen::AngleAxisd(rot_rad, Eigen::Vector3d::UnitZ()).toRotationMatrix();
 
     radar::types::Frame frame;
@@ -164,8 +163,8 @@ TEST_F(LocalizationTest, KnownRotation) {
     Eigen::AngleAxisd aa(R_result);
     // 旋转轴应接近 Z 轴（取绝对值，四元数符号不影响旋转）
     EXPECT_NEAR(std::abs(aa.axis().z()), 1.0, 0.2) << "Rotation axis should be |Z|";
-    EXPECT_NEAR(std::abs(aa.angle()), 15.0 * M_PI / 180.0, 0.1)
-        << "Expected ~15deg rotation magnitude";
+    EXPECT_NEAR(std::abs(aa.angle()), 15.0 * M_PI / 180.0, 0.1) << "Expected ~15deg rotation "
+                                                                   "magnitude";
     EXPECT_TRUE(result->converged);
 }
 
@@ -193,7 +192,7 @@ TEST_F(LocalizationTest, SetInitialPoseAndReset) {
 
     // set_initial_pose 不应崩溃
     Eigen::Isometry3d pose = Eigen::Isometry3d::Identity();
-    pose.translation() = Eigen::Vector3d(1.0, 2.0, 3.0);
+    pose.translation()     = Eigen::Vector3d(1.0, 2.0, 3.0);
     localization.set_initial_pose(pose);
 
     // reset 不应崩溃

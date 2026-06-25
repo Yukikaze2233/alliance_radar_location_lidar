@@ -30,13 +30,13 @@ private:
     void publish_clusters(const std::vector<ClusterResult>& clusters, types::Timestamp stamp);
 
     void transform_scan_to_map(const types::PointCloud& scan, const types::PoseEstimate& pose,
-                               types::PointCloud& transformed);
+        types::PointCloud& transformed);
 
     std::shared_ptr<const MapData> map_;
-    LocalizationStage    localization_;
-    DynamicCloudStage    dynamic_stage_;
-    ClusterStage         cluster_stage_;
-    bool                 detection_enabled_ = true;
+    LocalizationStage localization_;
+    DynamicCloudStage dynamic_stage_;
+    ClusterStage cluster_stage_;
+    bool detection_enabled_ = true;
 
     std::string scan_topic_;
     std::string hardware_id_;

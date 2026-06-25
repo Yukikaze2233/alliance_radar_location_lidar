@@ -14,11 +14,11 @@ struct KalmanState {
     Eigen::Matrix4d P = Eigen::Matrix4d::Identity();
 
     std::chrono::steady_clock::time_point last_update;
-    int   track_id      = -1;
-    int   hit_count     = 0;
-    int   miss_count    = 0;
-    int   color         = -1;   // 0=blue, 2=red, -1=unknown
-    int   number        = -1;   // robot number 0-5
+    int track_id   = -1;
+    int hit_count  = 0;
+    int miss_count = 0;
+    int color      = -1; // 0=blue, 2=red, -1=unknown
+    int number     = -1; // robot number 0-5
 
     [[nodiscard]] auto position() const -> Eigen::Vector2d { return x.head<2>(); }
     [[nodiscard]] auto velocity() const -> Eigen::Vector2d { return x.tail<2>(); }
@@ -34,8 +34,7 @@ public:
     void predict(std::chrono::steady_clock::time_point now);
 
     /// 用观测更新
-    void update(const Eigen::Vector2d& measurement,
-                std::chrono::steady_clock::time_point now);
+    void update(const Eigen::Vector2d& measurement, std::chrono::steady_clock::time_point now);
 
     [[nodiscard]] auto distance_squared_to(const Eigen::Vector2d& measurement) const -> double;
 

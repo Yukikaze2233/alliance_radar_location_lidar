@@ -31,7 +31,11 @@ public:
     void set_initial_pose(const Eigen::Isometry3d& pose) { prev_pose_ = pose; }
 
     /// @brief 重置为单位位姿（重新开始跟踪）
-    void reset() { prev_pose_ = Eigen::Isometry3d::Identity(); locked_ = false; accumulator_.clear(); }
+    void reset() {
+        prev_pose_ = Eigen::Isometry3d::Identity();
+        locked_    = false;
+        accumulator_.clear();
+    }
 
     /// @brief 是否已锁定（use_lock_strategy 启用时）
     [[nodiscard]] auto is_locked() const -> bool { return locked_; }
@@ -44,9 +48,9 @@ private:
     Eigen::Isometry3d prev_pose_;
     std::vector<Eigen::Vector3d> target_points_; // 缓存的地图点，构造时一次提取
 
-    SphericalGrid    spherical_grid_;
+    SphericalGrid spherical_grid_;
     FrameAccumulator accumulator_;
-    bool             locked_ = false;
+    bool locked_ = false;
 };
 
 } // namespace radar
