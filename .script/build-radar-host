@@ -6,9 +6,5 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "[build-radar-host] Building in RADAR container..."
-docker exec RADAR zsh -lc "build-radar $@"
-
-echo "[build-radar-host] Exporting compile_commands for host clangd..."
-"${SCRIPT_DIR}/export-compile-commands"
-
+docker exec -e HOST_WORKSPACE="$PWD" RADAR zsh -lc "build-radar $@"
 echo "[build-radar-host] Done. Run :LspRestart in neovim to refresh clangd."
