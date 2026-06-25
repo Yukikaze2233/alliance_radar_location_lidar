@@ -11,14 +11,19 @@
 #include <Eigen/Geometry>
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
-#include <iostream>
 #include <expected>
-#include <optional>
+#include <fcntl.h>
+#include <iostream>
 #include <numeric>
+#include <optional>
 #include <string>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include <vector>
 
 namespace {
@@ -35,7 +40,7 @@ struct Args {
     double scale          = 1.0;
     double voxel_leaf     = 0.0;
     std::optional<Roi> roi;
-    unsigned seed         = 42;
+    bool write_shm        = false;
 };
 
 struct TriangleRecord {
@@ -58,7 +63,7 @@ auto parse_args(int argc, char** argv) -> std::expected<Args, std::string> {
             "  --scale <float>     coordinate scale factor (e.g. 0.01 for cm→m, default 1.0)\n"
             "  --voxel <float>     VoxelGrid leaf size, 0=skip (default 0)\n"
             "  --roi <6 floats>    x_min,x_max,y_min,y_max,z_min,z_max\n"
-            "  --seed <int>        random seed (default 42)\n");
+            "  --shm               write point cloud to /pointcloud_frame SHM\n");
     }
 
     Args args;
@@ -73,8 +78,8 @@ auto parse_args(int argc, char** argv) -> std::expected<Args, std::string> {
             args.voxel_leaf = std::stod(argv[++i]);
         } else if (arg == "--scale" && i + 1 < argc) {
             args.scale = std::stod(argv[++i]);
-        } else if (arg == "--seed" && i + 1 < argc) {
-            args.seed = static_cast<unsigned>(std::stoul(argv[++i]));
+        } else if (arg == "--shm") {
+            args.write_shm = true;
         } else if (arg == "--roi" && i + 6 < argc) {
             args.roi = Roi {
                 .min = Eigen::Vector3f(
@@ -136,8 +141,22 @@ auto grid_point(const Eigen::Vector3f& a, const Eigen::Vector3f& b, const Eigen:
     return a + (b - a) * fi + (c - a) * fj;
 }
 
+/// Pack absolute normal components into PCL rgb float.
+/// Mapping: r=|nx|, g=|nz|, b=|ny| → ground (n·up) green, walls red/blue.
+inline float pack_rgb(const Eigen::Vector3f& normal) {
+    const auto r = static_cast<uint8_t>(std::abs(normal.x()) * 255.0f);
+    const auto g = static_cast<uint8_t>(std::abs(normal.z()) * 255.0f);
+    const auto b = static_cast<uint8_t>(std::abs(normal.y()) * 255.0f);
+    const uint32_t packed = (static_cast<uint32_t>(r) << 16)
+                          | (static_cast<uint32_t>(g) << 8)
+                          | static_cast<uint32_t>(b);
+    float result;
+    std::memcpy(&result, &packed, sizeof(float));
+    return result;
+}
+
 void append_subdivided_triangle_samples(const TriangleRecord& triangle, std::size_t sample_count,
-    float scale, pcl::PointCloud<pcl::PointXYZ>& cloud) {
+    float scale, pcl::PointCloud<pcl::PointXYZRGBNormal>& cloud) {
     if (sample_count == 0) {
         return;
     }
@@ -145,9 +164,25 @@ void append_subdivided_triangle_samples(const TriangleRecord& triangle, std::siz
     const Eigen::Vector3f a = triangle.a * scale;
     const Eigen::Vector3f b = triangle.b * scale;
     const Eigen::Vector3f c = triangle.c * scale;
+
+    // Face normal (direction preserved under uniform scale; area>0 ensures non-degenerate)
+    const Eigen::Vector3f normal = ((b - a).cross(c - a)).normalized();
+    const float packed = pack_rgb(normal);
+
+    auto make_point = [&](const Eigen::Vector3f& pos) -> pcl::PointXYZRGBNormal {
+        pcl::PointXYZRGBNormal pt;
+        pt.x = pos.x();
+        pt.y = pos.y();
+        pt.z = pos.z();
+        pt.rgb       = packed;
+        pt.normal_x  = normal.x();
+        pt.normal_y  = normal.y();
+        pt.normal_z  = normal.z();
+        return pt;
+    };
+
     if (sample_count == 1) {
-        const Eigen::Vector3f centroid = (a + b + c) / 3.0f;
-        cloud.push_back(pcl::PointXYZ(centroid.x(), centroid.y(), centroid.z()));
+        cloud.push_back(make_point((a + b + c) / 3.0f));
         return;
     }
 
@@ -172,7 +207,7 @@ void append_subdivided_triangle_samples(const TriangleRecord& triangle, std::siz
 
     if (candidates.size() <= sample_count) {
         for (const auto& point : candidates) {
-            cloud.push_back(pcl::PointXYZ(point.x(), point.y(), point.z()));
+            cloud.push_back(make_point(point));
         }
         return;
     }
@@ -182,9 +217,113 @@ void append_subdivided_triangle_samples(const TriangleRecord& triangle, std::siz
         const auto index = std::min(
             static_cast<std::size_t>(std::floor((static_cast<double>(i) + 0.5) * stride)),
             candidates.size() - 1);
-        const auto& point = candidates[index];
-        cloud.push_back(pcl::PointXYZ(point.x(), point.y(), point.z()));
+        cloud.push_back(make_point(candidates[index]));
     }
+}
+
+// ── Shared memory writer ───────────────────────────────────────────
+
+/// Per-point layout in SHM: 28 bytes.
+struct ShmPoint {
+    float x, y, z;
+    uint8_t r, g, b, a;
+    float nx, ny, nz;
+};
+static_assert(sizeof(ShmPoint) == 28, "ShmPoint must be 28 bytes");
+
+/// Header layout: 64 bytes, with atomic counters for lock-free consumer reads.
+struct ShmHeader {
+    uint32_t magic       = 0x50434446;  // "PCDF"
+    uint32_t version     = 1;
+    uint32_t point_count = 0;
+    uint32_t max_points  = 0;
+    std::atomic<uint32_t> frame_seq{0};
+    std::atomic<uint32_t> write_idx{0};
+    uint32_t stride      = sizeof(ShmPoint);
+    uint8_t _pad[36]     = {};
+};
+static_assert(sizeof(ShmHeader) == 64, "ShmHeader must be 64 bytes");
+
+/// Write point cloud data to /pointcloud_frame shared memory.
+/// Coordinate mapping: SHM(x,y,z) = PCD(x,z,y); normals: (nx, nz, ny).
+int write_to_shm(const pcl::PointCloud<pcl::PointXYZRGBNormal>& cloud) {
+    constexpr const char* shm_name = "/pointcloud_frame";
+
+    if (cloud.empty()) {
+        std::cerr << "[model_to_map] SHM: point cloud is empty" << std::endl;
+        return 1;
+    }
+
+    const uint32_t n_points = static_cast<uint32_t>(cloud.size());
+    const size_t shm_size = sizeof(ShmHeader) + 2ULL * n_points * sizeof(ShmPoint);
+
+    shm_unlink(shm_name);
+    const int fd = shm_open(shm_name, O_CREAT | O_RDWR, 0666);
+    if (fd < 0) {
+        std::cerr << "[model_to_map] SHM: shm_open failed: " << std::strerror(errno) << std::endl;
+        return 1;
+    }
+    if (ftruncate(fd, static_cast<off_t>(shm_size)) != 0) {
+        std::cerr << "[model_to_map] SHM: ftruncate failed: " << std::strerror(errno) << std::endl;
+        close(fd);
+        shm_unlink(shm_name);
+        return 1;
+    }
+
+    void* addr = mmap(nullptr, shm_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if (addr == MAP_FAILED) {
+        std::cerr << "[model_to_map] SHM: mmap failed: " << std::strerror(errno) << std::endl;
+        close(fd);
+        shm_unlink(shm_name);
+        return 1;
+    }
+    close(fd);
+
+    auto* header = static_cast<ShmHeader*>(addr);
+    header->magic       = 0x50434446;
+    header->version     = 1;
+    header->point_count = n_points;
+    header->max_points  = n_points;
+    header->stride      = sizeof(ShmPoint);
+    std::memset(header->_pad, 0, sizeof(header->_pad));
+    header->write_idx.store(0, std::memory_order_relaxed);
+
+    auto* buf = reinterpret_cast<ShmPoint*>(static_cast<char*>(addr) + sizeof(ShmHeader));
+    for (uint32_t i = 0; i < n_points; ++i) {
+        const auto& pt = cloud.points[i];
+
+        uint32_t rgb_packed;
+        std::memcpy(&rgb_packed, &pt.rgb, sizeof(uint32_t));
+
+        buf[i].x  = pt.x;
+        buf[i].y  = pt.z;
+        buf[i].z  = pt.y;
+        buf[i].r  = static_cast<uint8_t>((rgb_packed >> 16) & 0xFF);
+        buf[i].g  = static_cast<uint8_t>((rgb_packed >> 8)  & 0xFF);
+        buf[i].b  = static_cast<uint8_t>(rgb_packed         & 0xFF);
+        buf[i].a  = 255;
+        buf[i].nx = pt.normal_x;
+        buf[i].ny = pt.normal_z;
+        buf[i].nz = pt.normal_y;
+    }
+
+    std::atomic_thread_fence(std::memory_order_release);
+    header->frame_seq.store(1, std::memory_order_release);
+
+    munmap(addr, shm_size);
+    std::cout << "[model_to_map] SHM: wrote " << n_points << " points to "
+              << shm_name << " (" << shm_size << " bytes)" << std::endl;
+    return 0;
+}
+
+/// Load PCD from disk and write to SHM (standalone PCD→SHM path).
+int write_to_shm_file(const std::string& pcd_path) {
+    pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGBNormal>());
+    if (pcl::io::loadPCDFile<pcl::PointXYZRGBNormal>(pcd_path, *cloud) != 0) {
+        std::cerr << "[model_to_map] SHM: failed to load " << pcd_path << std::endl;
+        return 1;
+    }
+    return write_to_shm(*cloud);
 }
 
 } // namespace
@@ -196,6 +335,18 @@ int main(int argc, char** argv) {
         return 1;
     }
     const auto args = *args_result;
+
+    // ── PCD-only path: load existing PCD → SHM ──────────────────
+    const bool is_pcd_input = args.input_path.size() >= 4
+        && args.input_path.compare(args.input_path.size() - 4, 4, ".pcd") == 0;
+
+    if (is_pcd_input) {
+        if (!args.write_shm) {
+            std::cerr << "[model_to_map] PCD input requires --shm" << std::endl;
+            return 1;
+        }
+        return write_to_shm_file(args.input_path);
+    }
 
     // ── 1. 加载 FBX ──────────────────────────────────────────────
     std::cout << "[model_to_map] Loading: " << args.input_path << std::endl;
@@ -216,7 +367,7 @@ int main(int argc, char** argv) {
     collect_triangles(scene->mRootNode, scene, Eigen::Matrix4f::Identity(), triangles);
     std::cout << "[model_to_map] Triangles: " << triangles.size() << std::endl;
 
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>());
+    pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGBNormal>());
 
     double total_area = 0.0;
     for (const auto& triangle : triangles) {
@@ -271,7 +422,7 @@ int main(int argc, char** argv) {
     }
 
     if (args.roi) {
-        pcl::PointCloud<pcl::PointXYZ>::Ptr filtered(new pcl::PointCloud<pcl::PointXYZ>());
+        pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr filtered(new pcl::PointCloud<pcl::PointXYZRGBNormal>());
         for (const auto& pt : cloud->points) {
             if (pt.x >= args.roi->min.x() && pt.x <= args.roi->max.x()
                 && pt.y >= args.roi->min.y() && pt.y <= args.roi->max.y()
@@ -284,8 +435,8 @@ int main(int argc, char** argv) {
     }
 
     if (args.voxel_leaf > 0.0) {
-        pcl::PointCloud<pcl::PointXYZ>::Ptr downsampled(new pcl::PointCloud<pcl::PointXYZ>());
-        pcl::VoxelGrid<pcl::PointXYZ> vg;
+        pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr downsampled(new pcl::PointCloud<pcl::PointXYZRGBNormal>());
+        pcl::VoxelGrid<pcl::PointXYZRGBNormal> vg;
         vg.setLeafSize(args.voxel_leaf, args.voxel_leaf, args.voxel_leaf);
         vg.setInputCloud(cloud);
         vg.filter(*downsampled);
@@ -305,5 +456,13 @@ int main(int argc, char** argv) {
 
     std::cout << "[model_to_map] Done. Output: " << args.output_path
               << " (" << cloud->size() << " points)" << std::endl;
+
+    if (args.write_shm) {
+        const int shm_rc = write_to_shm(*cloud);
+        if (shm_rc != 0) {
+            return shm_rc;
+        }
+    }
+
     return 0;
 }

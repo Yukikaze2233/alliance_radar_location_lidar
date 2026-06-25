@@ -3,6 +3,7 @@
 #include <Eigen/Core>
 #include <expected>
 #include <filesystem>
+#include <memory>
 #include <string>
 #include <vector>
 #include <yaml-cpp/yaml.h>

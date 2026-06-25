@@ -9,18 +9,22 @@ set -euo pipefail
 : "${RADAR_WS:=/workspace}"
 BUILD_TYPE="Release"
 
+EXTRA_ARGS=()
 for arg in "$@"; do
     case "$arg" in
         Release|Debug)
             BUILD_TYPE="$arg"
-            shift
             ;;
         --clean)
             echo "> ERROR: --clean is removed. Use 'clean-radar' script instead." >&2
             exit 2
             ;;
+        *)
+            EXTRA_ARGS+=("$arg")
+            ;;
     esac
 done
+set -- "${EXTRA_ARGS[@]}"
 
 if [[ ! -d "${RADAR_WS}/ros_ws" ]]; then
     echo "> ERROR: Workspace not found: ${RADAR_WS}/ros_ws"

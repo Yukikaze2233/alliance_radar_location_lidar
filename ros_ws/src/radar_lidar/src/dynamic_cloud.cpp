@@ -72,7 +72,7 @@ auto DynamicCloudStage::process(const types::PointCloud& scan)
         auto& idx     = thread_indices[tid];
         auto& dist_sq = thread_dist_sq[tid];
         if (kd_tree_.nearestKSearch(query, 1, idx, dist_sq) > 0) {
-            if (dist_sq[0] > cfg_.distance_threshold) {
+            if (dist_sq[0] > cfg_.distance_threshold * cfg_.distance_threshold) {
                 thread_clouds[tid].push_back(roi_points[i]);
             }
         }

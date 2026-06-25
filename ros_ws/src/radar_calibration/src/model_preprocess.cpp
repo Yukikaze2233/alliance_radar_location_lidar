@@ -23,14 +23,22 @@ public:
         }
 
         if (const auto map_node = model_node["map_path"];
-            map_node.IsDefined() && !map_node.as<std::string>().empty()) {
-            map_path = map_node.as<std::string>();
+            map_node.IsDefined()) {
+            if (!map_node.IsScalar()) {
+                return std::unexpected("Model.map_path must be a string");
+            }
+            const auto str_path = map_node.as<std::string>();
+            if (str_path.empty()) {
+                return std::unexpected("Model.map_path must not be empty");
+            }
+            map_path = str_path;
         } else {
             return std::unexpected("Model.map_path is required (should point to the PCD generated "
                                    "by model_to_map)");
         }
 
-        if (!std::filesystem::exists(map_path)) {
+        std::error_code ec;
+        if (!std::filesystem::exists(map_path, ec)) {
             return std::unexpected("Map PCD not found: " + map_path.string());
         }
         return true;

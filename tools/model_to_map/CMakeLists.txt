@@ -14,6 +14,7 @@ target_link_libraries(model_to_map
     assimp::assimp
     ${PCL_LIBRARIES}
     Eigen3::Eigen
+    rt
 )
 
 target_include_directories(model_to_map PRIVATE

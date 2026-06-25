@@ -128,7 +128,9 @@ LidarPipeline::LidarPipeline()
     pub_diag_ = this->create_publisher<diagnostic_msgs::msg::DiagnosticStatus>("/diagnostics", 10);
     pub_dynamic_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/lidar/dynamic", 10);
     pub_clusters_ =
-        this->create_publisher<visualization_msgs::msg::MarkerArray>("/lidar/cluster", 10);
+        this->create_publisher<sensor_msgs::msg::PointCloud2>("/lidar/cluster", 10);
+    pub_cluster_viz_ =
+        this->create_publisher<visualization_msgs::msg::MarkerArray>("/lidar/cluster_viz", 10);
 
     RCLCPP_INFO(get_logger(), "radar_lidar ready. Listening on %s (detection=%s)",
         scan_topic_.c_str(), detection_enabled_ ? "ON" : "OFF");
@@ -270,12 +272,31 @@ void LidarPipeline::publish_dynamic(
 
 void LidarPipeline::publish_clusters(
     const std::vector<ClusterResult>& clusters, types::Timestamp stamp) {
+    // Centroid PointCloud2 for downstream consumption (fusion_node)
+    pcl::PointCloud<pcl::PointXYZ>::Ptr centroids(new pcl::PointCloud<pcl::PointXYZ>());
+    centroids->reserve(clusters.size());
+    for (const auto& c : clusters) {
+        centroids->emplace_back(
+            static_cast<float>(c.centroid.x()),
+            static_cast<float>(c.centroid.y()),
+            static_cast<float>(c.centroid.z()));
+    }
+    centroids->width    = centroids->size();
+    centroids->height   = 1;
+    centroids->is_dense = true;
+
+    sensor_msgs::msg::PointCloud2 centroid_msg;
+    pcl::toROSMsg(*centroids, centroid_msg);
+    centroid_msg.header.stamp    = rclcpp::Time(stamp);
+    centroid_msg.header.frame_id = output_frame_;
+    pub_clusters_->publish(centroid_msg);
+
+    // MarkerArray visualization (AABB boxes + centroid spheres)
     visualization_msgs::msg::MarkerArray markers;
 
     for (size_t i = 0; i < clusters.size(); ++i) {
         const auto& c = clusters[i];
 
-        // AABB 边界框
         visualization_msgs::msg::Marker box;
         box.header.stamp    = rclcpp::Time(stamp);
         box.header.frame_id = output_frame_;
@@ -302,10 +323,8 @@ void LidarPipeline::publish_clusters(
         box.color.b  = 0.0f;
         box.color.a  = 0.3f;
         box.lifetime = rclcpp::Duration::from_seconds(0.5);
-
         markers.markers.push_back(box);
 
-        // 质心球
         visualization_msgs::msg::Marker centroid;
         centroid.header.stamp    = rclcpp::Time(stamp);
         centroid.header.frame_id = output_frame_;
@@ -328,11 +347,10 @@ void LidarPipeline::publish_clusters(
         centroid.color.b  = 0.0f;
         centroid.color.a  = 1.0f;
         centroid.lifetime = rclcpp::Duration::from_seconds(0.5);
-
         markers.markers.push_back(centroid);
     }
 
-    pub_clusters_->publish(markers);
+    pub_cluster_viz_->publish(markers);
 }
 
 } // namespace radar
