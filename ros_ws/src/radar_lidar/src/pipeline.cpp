@@ -5,6 +5,8 @@
 
 #include <pcl_conversions/pcl_conversions.h>
 
+#include "radar_lidar/cluster_message.hpp"
+
 namespace radar {
 
 LidarPipeline::LidarPipeline()
@@ -126,8 +128,9 @@ LidarPipeline::LidarPipeline()
     pub_pose_ =
         this->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>("/lidar/pose", 10);
     pub_diag_ = this->create_publisher<diagnostic_msgs::msg::DiagnosticStatus>("/diagnostics", 10);
-    pub_dynamic_  = this->create_publisher<sensor_msgs::msg::PointCloud2>("/lidar/dynamic", 10);
-    pub_clusters_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/lidar/cluster", 10);
+    pub_dynamic_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/lidar/dynamic", 10);
+    pub_clusters_ =
+        this->create_publisher<radar_interfaces::msg::ClusterArray>("/lidar/cluster", 10);
     pub_cluster_viz_ =
         this->create_publisher<visualization_msgs::msg::MarkerArray>("/lidar/cluster_viz", 10);
 
@@ -271,22 +274,7 @@ void LidarPipeline::publish_dynamic(
 
 void LidarPipeline::publish_clusters(
     const std::vector<ClusterResult>& clusters, types::Timestamp stamp) {
-    // Centroid PointCloud2 for downstream consumption (fusion_node)
-    pcl::PointCloud<pcl::PointXYZ>::Ptr centroids(new pcl::PointCloud<pcl::PointXYZ>());
-    centroids->reserve(clusters.size());
-    for (const auto& c : clusters) {
-        centroids->emplace_back(static_cast<float>(c.centroid.x()),
-            static_cast<float>(c.centroid.y()), static_cast<float>(c.centroid.z()));
-    }
-    centroids->width    = centroids->size();
-    centroids->height   = 1;
-    centroids->is_dense = true;
-
-    sensor_msgs::msg::PointCloud2 centroid_msg;
-    pcl::toROSMsg(*centroids, centroid_msg);
-    centroid_msg.header.stamp    = rclcpp::Time(stamp);
-    centroid_msg.header.frame_id = output_frame_;
-    pub_clusters_->publish(centroid_msg);
+    pub_clusters_->publish(make_cluster_array_message(clusters, stamp, output_frame_));
 
     // MarkerArray visualization (AABB boxes + centroid spheres)
     visualization_msgs::msg::MarkerArray markers;

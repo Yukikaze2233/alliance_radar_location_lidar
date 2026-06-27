@@ -7,6 +7,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -DNDEBUG")
 
 find_package(ament_cmake REQUIRED)
 find_package(ament_cmake_auto REQUIRED)
+find_package(radar_interfaces REQUIRED)
 find_package(small_gicp REQUIRED)
 find_package(PCL REQUIRED COMPONENTS common io filters segmentation search kdtree)
 find_package(Eigen3 REQUIRED)
@@ -38,6 +39,7 @@ ament_auto_add_executable(${PROJECT_NAME}_node
     src/runtime.cpp
 )
 target_link_libraries(${PROJECT_NAME}_node ${PROJECT_NAME}_core)
+ament_target_dependencies(${PROJECT_NAME}_node radar_interfaces)
 
 # ── Offline tool ─────────────────────────────────────────────────
 add_executable(registration_tool
@@ -57,8 +59,10 @@ if(BUILD_TESTING)
       test/test_map_data.cpp
       test/test_localization.cpp
       test/test_detection.cpp
+      test/test_cluster_message.cpp
   )
   target_link_libraries(radar_tests ${PROJECT_NAME}_core)
+  ament_target_dependencies(radar_tests radar_interfaces)
 endif()
 
 install(TARGETS ${PROJECT_NAME}_node registration_tool DESTINATION lib/${PROJECT_NAME})
