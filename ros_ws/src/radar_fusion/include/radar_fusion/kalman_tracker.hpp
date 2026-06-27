@@ -1,6 +1,6 @@
 #pragma once
 
-#include <chrono>
+#include <cstdint>
 #include <vector>
 
 #include <Eigen/Core>
@@ -13,16 +13,16 @@ struct KalmanState {
     Eigen::Vector4d x = Eigen::Vector4d::Zero();
     Eigen::Matrix4d P = Eigen::Matrix4d::Identity();
 
-    std::chrono::steady_clock::time_point last_update;
-    int track_id   = -1;
-    int hit_count  = 0;
-    int miss_count = 0;
-    int color      = -1; // 0=blue, 2=red, -1=unknown
-    int number     = -1; // robot number 0-5
+    int64_t last_update_ns = 0;
+    int track_id           = -1;
+    int hit_count          = 0;
+    int miss_count         = 0;
+    int color              = -1; // 0=blue, 2=red, -1=unknown
+    int number             = -1; // robot number 0-5
 
     [[nodiscard]] auto position() const -> Eigen::Vector2d { return x.head<2>(); }
     [[nodiscard]] auto velocity() const -> Eigen::Vector2d { return x.tail<2>(); }
-    [[nodiscard]] auto is_stale(double timeout_sec) const -> bool;
+    [[nodiscard]] auto is_stale(int64_t now_ns, double timeout_sec) const -> bool;
 };
 
 /// 单个目标的 2D 常速卡尔曼滤波器
@@ -31,10 +31,10 @@ public:
     explicit KalmanTracker(int track_id);
 
     /// 预测到指定时间
-    void predict(std::chrono::steady_clock::time_point now);
+    void predict(int64_t now_ns);
 
     /// 用观测更新
-    void update(const Eigen::Vector2d& measurement, std::chrono::steady_clock::time_point now);
+    void update(const Eigen::Vector2d& measurement, int64_t now_ns);
 
     [[nodiscard]] auto distance_squared_to(const Eigen::Vector2d& measurement) const -> double;
 
