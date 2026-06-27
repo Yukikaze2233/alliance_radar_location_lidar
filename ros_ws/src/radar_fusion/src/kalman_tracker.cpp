@@ -4,13 +4,10 @@
 
 namespace radar::fusion {
 
-KalmanTracker::KalmanTracker(int track_id) {
-    state_.track_id    = track_id;
-    state_.last_update = std::chrono::steady_clock::now();
-}
+KalmanTracker::KalmanTracker(int track_id) { state_.track_id = track_id; }
 
-void KalmanTracker::predict(std::chrono::steady_clock::time_point now) {
-    double dt = std::chrono::duration<double>(now - state_.last_update).count();
+void KalmanTracker::predict(int64_t now_ns) {
+    double dt = static_cast<double>(now_ns - state_.last_update_ns) / 1e9;
     if (dt < 0) dt = 0;
 
     // 状态转移矩阵 F = [[1,0,dt,0],[0,1,0,dt],[0,0,1,0],[0,0,0,1]]
@@ -36,8 +33,7 @@ void KalmanTracker::predict(std::chrono::steady_clock::time_point now) {
     state_.P = F * state_.P * F.transpose() + Q;
 }
 
-void KalmanTracker::update(
-    const Eigen::Vector2d& measurement, std::chrono::steady_clock::time_point now) {
+void KalmanTracker::update(const Eigen::Vector2d& measurement, int64_t now_ns) {
     // 观测矩阵 H = [[1,0,0,0],[0,1,0,0]]
     Eigen::Matrix<double, 2, 4> H = Eigen::Matrix<double, 2, 4>::Zero();
     H(0, 0)                       = 1.0;
@@ -50,9 +46,9 @@ void KalmanTracker::update(
     const Eigen::Matrix2d S_inv   = S.ldlt().solve(Eigen::Matrix2d::Identity());
     Eigen::Matrix<double, 4, 2> K = state_.P * H.transpose() * S_inv;
 
-    state_.x           = state_.x + K * y;
-    state_.P           = (Eigen::Matrix4d::Identity() - K * H) * state_.P;
-    state_.last_update = now;
+    state_.x              = state_.x + K * y;
+    state_.P              = (Eigen::Matrix4d::Identity() - K * H) * state_.P;
+    state_.last_update_ns = now_ns;
     state_.hit_count++;
     state_.miss_count = 0;
 }
@@ -61,9 +57,8 @@ auto KalmanTracker::distance_squared_to(const Eigen::Vector2d& measurement) cons
     return (state_.x.head<2>() - measurement).squaredNorm();
 }
 
-auto KalmanState::is_stale(double timeout_sec) const -> bool {
-    auto now   = std::chrono::steady_clock::now();
-    double age = std::chrono::duration<double>(now - last_update).count();
+auto KalmanState::is_stale(int64_t now_ns, double timeout_sec) const -> bool {
+    double age = static_cast<double>(now_ns - last_update_ns) / 1e9;
     return age > timeout_sec;
 }
 
