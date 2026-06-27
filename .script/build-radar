@@ -69,6 +69,7 @@ COLON_ARGS=(
         hikcamera
         hikcamera_ros_driver
         odin_ros_driver
+        radar_interfaces
         radar_lidar
         radar_camera
         radar_fusion
