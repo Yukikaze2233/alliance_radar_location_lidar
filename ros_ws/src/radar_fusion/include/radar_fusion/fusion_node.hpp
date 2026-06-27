@@ -4,10 +4,10 @@
 #include <memory>
 #include <vector>
 
-#include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
+#include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
+#include <radar_interfaces/msg/cluster_array.hpp>
 #include <rclcpp/rclcpp.hpp>
-#include <sensor_msgs/msg/point_cloud2.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
 
 #include "radar_fusion/kalman_tracker.hpp"
@@ -28,7 +28,7 @@ public:
 private:
     void on_lidar_pose(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg);
 
-    void on_cluster(const sensor_msgs::msg::PointCloud2::SharedPtr msg);
+    void on_cluster(const radar_interfaces::msg::ClusterArray::SharedPtr msg);
 
     void publish_tracks(const std::vector<KalmanTracker>& tracks, const rclcpp::Time& stamp);
 
@@ -37,7 +37,7 @@ private:
     int next_track_id_ = 0;
 
     rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr sub_lidar_pose_;
-    rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr sub_cluster_;
+    rclcpp::Subscription<radar_interfaces::msg::ClusterArray>::SharedPtr sub_cluster_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pub_tracks_;
     rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pub_pose_;
 };

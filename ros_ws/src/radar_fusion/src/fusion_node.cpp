@@ -1,9 +1,5 @@
 #include "radar_fusion/fusion_node.hpp"
 
-#include <pcl/point_cloud.h>
-#include <pcl/point_types.h>
-#include <pcl_conversions/pcl_conversions.h>
-
 #include <algorithm>
 #include <cmath>
 
@@ -31,8 +27,8 @@ FusionNode::FusionNode()
             on_lidar_pose(msg);
         });
 
-    sub_cluster_ = this->create_subscription<sensor_msgs::msg::PointCloud2>("/lidar/cluster", 10,
-        [this](const sensor_msgs::msg::PointCloud2::SharedPtr msg) { on_cluster(msg); });
+    sub_cluster_ = this->create_subscription<radar_interfaces::msg::ClusterArray>("/lidar/cluster",
+        10, [this](const radar_interfaces::msg::ClusterArray::SharedPtr msg) { on_cluster(msg); });
 
     pub_tracks_ =
         this->create_publisher<visualization_msgs::msg::MarkerArray>("/fusion/tracks", 10);
@@ -49,19 +45,15 @@ void FusionNode::on_lidar_pose(const geometry_msgs::msg::PoseWithCovarianceStamp
     pub_pose_->publish(pose);
 }
 
-void FusionNode::on_cluster(const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
+void FusionNode::on_cluster(const radar_interfaces::msg::ClusterArray::SharedPtr msg) {
     auto stamp  = rclcpp::Time(msg->header.stamp);
     auto now_ns = stamp.nanoseconds();
 
-    // 解析聚类质心点云
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
-    pcl::fromROSMsg(*msg, *cloud);
-
     std::vector<Eigen::Vector2d> measurements;
-    measurements.reserve(cloud->size());
-    for (const auto& pt : cloud->points) {
-        if (std::isfinite(pt.x) && std::isfinite(pt.y)) {
-            measurements.emplace_back(pt.x, pt.y);
+    measurements.reserve(msg->clusters.size());
+    for (const auto& cluster : msg->clusters) {
+        if (std::isfinite(cluster.centroid.x) && std::isfinite(cluster.centroid.y)) {
+            measurements.emplace_back(cluster.centroid.x, cluster.centroid.y);
         }
     }
 
