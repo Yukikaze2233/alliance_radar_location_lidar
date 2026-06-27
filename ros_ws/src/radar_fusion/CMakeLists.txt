@@ -7,7 +7,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=native -DNDEBUG")
 
 find_package(ament_cmake REQUIRED)
 find_package(ament_cmake_auto REQUIRED)
-find_package(PCL REQUIRED COMPONENTS common io)
+find_package(radar_interfaces REQUIRED)
 find_package(Eigen3 REQUIRED)
 
 ament_auto_find_build_dependencies()
@@ -18,9 +18,9 @@ ament_auto_add_executable(${PROJECT_NAME}_node
     src/kalman_tracker.cpp
 )
 target_link_libraries(${PROJECT_NAME}_node
-    ${PCL_LIBRARIES}
     Eigen3::Eigen
 )
+ament_target_dependencies(${PROJECT_NAME}_node radar_interfaces)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -34,17 +34,15 @@ if(BUILD_TESTING)
       src/fusion_node.cpp
       src/kalman_tracker.cpp
   )
-  target_include_directories(radar_fusion_tests PRIVATE include ${PCL_INCLUDE_DIRS})
+  target_include_directories(radar_fusion_tests PRIVATE include)
   ament_target_dependencies(radar_fusion_tests
       rclcpp
       geometry_msgs
-      sensor_msgs
+      radar_interfaces
       visualization_msgs
-      pcl_conversions
       tf2_geometry_msgs
   )
   target_link_libraries(radar_fusion_tests
-      ${PCL_LIBRARIES}
       Eigen3::Eigen
   )
 endif()

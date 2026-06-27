@@ -1,7 +1,3 @@
-#include <pcl/point_cloud.h>
-#include <pcl/point_types.h>
-#include <pcl_conversions/pcl_conversions.h>
-
 #include <gtest/gtest.h>
 
 #include <chrono>
@@ -12,9 +8,10 @@
 
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
+#include <radar_interfaces/msg/cluster.hpp>
+#include <radar_interfaces/msg/cluster_array.hpp>
 #include <rclcpp/executors/single_threaded_executor.hpp>
 #include <rclcpp/rclcpp.hpp>
-#include <sensor_msgs/msg/point_cloud2.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
 
 #include "radar_fusion/fusion_node.hpp"
@@ -43,8 +40,8 @@ protected:
         publisher_node_  = std::make_shared<rclcpp::Node>("fusion_node_test_publisher");
         subscriber_node_ = std::make_shared<rclcpp::Node>("fusion_node_test_subscriber");
 
-        cluster_pub_ =
-            publisher_node_->create_publisher<sensor_msgs::msg::PointCloud2>("/lidar/cluster", 10);
+        cluster_pub_ = publisher_node_->create_publisher<radar_interfaces::msg::ClusterArray>(
+            "/lidar/cluster", 10);
         lidar_pose_pub_ =
             publisher_node_->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>(
                 "/lidar/pose", 10);
@@ -134,18 +131,20 @@ protected:
     }
 
     auto make_cluster_msg(double x, double y, double z, uint32_t nanosec)
-        -> sensor_msgs::msg::PointCloud2 {
-        pcl::PointCloud<pcl::PointXYZ> cloud;
-        cloud.emplace_back(static_cast<float>(x), static_cast<float>(y), static_cast<float>(z));
-        cloud.width    = cloud.size();
-        cloud.height   = 1;
-        cloud.is_dense = true;
+        -> radar_interfaces::msg::ClusterArray {
+        radar_interfaces::msg::Cluster cluster;
+        cluster.centroid.x  = x;
+        cluster.centroid.y  = y;
+        cluster.centroid.z  = z;
+        cluster.min_bound   = cluster.centroid;
+        cluster.max_bound   = cluster.centroid;
+        cluster.point_count = 1;
 
-        sensor_msgs::msg::PointCloud2 msg;
-        pcl::toROSMsg(cloud, msg);
+        radar_interfaces::msg::ClusterArray msg;
         msg.header.stamp.sec     = 0;
         msg.header.stamp.nanosec = nanosec;
         msg.header.frame_id      = "map";
+        msg.clusters.push_back(cluster);
         return msg;
     }
 
@@ -153,7 +152,7 @@ protected:
     std::shared_ptr<radar::fusion::FusionNode> fusion_node_;
     rclcpp::Node::SharedPtr publisher_node_;
     rclcpp::Node::SharedPtr subscriber_node_;
-    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr cluster_pub_;
+    rclcpp::Publisher<radar_interfaces::msg::ClusterArray>::SharedPtr cluster_pub_;
     rclcpp::Publisher<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr lidar_pose_pub_;
     rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr pose_sub_;
     rclcpp::Subscription<visualization_msgs::msg::MarkerArray>::SharedPtr tracks_sub_;
