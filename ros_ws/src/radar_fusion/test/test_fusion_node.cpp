@@ -5,6 +5,7 @@
 #include <memory>
 #include <mutex>
 #include <thread>
+#include <tuple>
 
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
@@ -132,19 +133,37 @@ protected:
 
     auto make_cluster_msg(double x, double y, double z, uint32_t nanosec)
         -> radar_interfaces::msg::ClusterArray {
-        radar_interfaces::msg::Cluster cluster;
-        cluster.centroid.x  = x;
-        cluster.centroid.y  = y;
-        cluster.centroid.z  = z;
-        cluster.min_bound   = cluster.centroid;
-        cluster.max_bound   = cluster.centroid;
-        cluster.point_count = 1;
+        return make_cluster_array_msg({ { x, y, z } }, nanosec);
+    }
 
+    auto make_cluster_array_msg(
+        const std::vector<std::tuple<double, double, double>>& points, uint32_t nanosec)
+        -> radar_interfaces::msg::ClusterArray {
         radar_interfaces::msg::ClusterArray msg;
         msg.header.stamp.sec     = 0;
         msg.header.stamp.nanosec = nanosec;
         msg.header.frame_id      = "map";
-        msg.clusters.push_back(cluster);
+
+        for (const auto& [x, y, z] : points) {
+            radar_interfaces::msg::Cluster cluster;
+            cluster.centroid.x  = x;
+            cluster.centroid.y  = y;
+            cluster.centroid.z  = z;
+            cluster.min_bound   = cluster.centroid;
+            cluster.max_bound   = cluster.centroid;
+            cluster.point_count = 1;
+            msg.clusters.push_back(cluster);
+        }
+
+        return msg;
+    }
+
+    auto make_empty_cluster_msg(uint32_t nanosec) -> radar_interfaces::msg::ClusterArray {
+        radar_interfaces::msg::Cluster cluster;
+        radar_interfaces::msg::ClusterArray msg;
+        msg.header.stamp.sec     = 0;
+        msg.header.stamp.nanosec = nanosec;
+        msg.header.frame_id      = "map";
         return msg;
     }
 
@@ -197,6 +216,79 @@ TEST_F(FusionNodeTest, ClusterTrackingUsesMessageTimeInsteadOfWallTime) {
 
     std::lock_guard<std::mutex> lock(mutex_);
     EXPECT_EQ(last_track_marker_count_, 3u);
+}
+
+TEST_F(FusionNodeTest, TentativeTrackIsDroppedAfterSingleMiss) {
+    cluster_pub_->publish(make_cluster_msg(0.0, 0.0, 0.0, 0u));
+    std::this_thread::sleep_for(200ms);
+
+    auto empty_msg = make_empty_cluster_msg(100000000u);
+    cluster_pub_->publish(empty_msg);
+    std::this_thread::sleep_for(200ms);
+
+    ASSERT_FALSE(wait_for_track_marker_count(3, 200ms));
+}
+
+TEST_F(FusionNodeTest, ConfirmedTrackSurvivesSingleMissButDropsAfterSecondMiss) {
+    cluster_pub_->publish(make_cluster_msg(0.0, 0.0, 0.0, 0u));
+    std::this_thread::sleep_for(1000ms);
+    cluster_pub_->publish(make_cluster_msg(0.8, 0.0, 0.0, 1000000000u));
+    std::this_thread::sleep_for(1000ms);
+    cluster_pub_->publish(make_cluster_msg(1.6, 0.0, 0.0, 2000000000u));
+
+    ASSERT_TRUE(wait_for_track_marker_count(3, 500ms));
+
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        track_publish_count_     = 0;
+        last_track_marker_count_ = 0;
+    }
+
+    auto first_miss = make_empty_cluster_msg(2100000000u);
+    cluster_pub_->publish(first_miss);
+
+    ASSERT_TRUE(wait_for_track_publish_count(1, 500ms));
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        EXPECT_EQ(last_track_marker_count_, 3u);
+        track_publish_count_     = 0;
+        last_track_marker_count_ = 0;
+    }
+
+    auto second_miss = make_empty_cluster_msg(2200000000u);
+    cluster_pub_->publish(second_miss);
+
+    ASSERT_TRUE(wait_for_track_publish_count(1, 500ms));
+    std::lock_guard<std::mutex> lock(mutex_);
+    EXPECT_EQ(last_track_marker_count_, 0u);
+}
+
+TEST_F(FusionNodeTest, GlobalGreedyAssociationKeepsTwoConfirmedTracks) {
+    cluster_pub_->publish(
+        make_cluster_array_msg({ { 0.0, 0.0, 0.0 }, { 1.5, 0.0, 0.0 } }, 0u));
+    std::this_thread::sleep_for(1000ms);
+
+    cluster_pub_->publish(
+        make_cluster_array_msg({ { 0.4, 0.0, 0.0 }, { 1.9, 0.0, 0.0 } }, 1000000000u));
+    std::this_thread::sleep_for(1000ms);
+
+    cluster_pub_->publish(
+        make_cluster_array_msg({ { 0.8, 0.0, 0.0 }, { 2.3, 0.0, 0.0 } }, 2000000000u));
+
+    ASSERT_TRUE(wait_for_track_marker_count(6, 500ms));
+
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        track_publish_count_     = 0;
+        last_track_marker_count_ = 0;
+    }
+
+    cluster_pub_->publish(
+        make_cluster_array_msg({ { 1.1, 0.0, 0.0 }, { 1.2, 0.0, 0.0 } }, 3000000000u));
+
+    ASSERT_TRUE(wait_for_track_publish_count(1, 500ms));
+    std::lock_guard<std::mutex> lock(mutex_);
+    EXPECT_EQ(last_track_marker_count_, 6u);
 }
 
 TEST_F(FusionNodeTest, LidarPoseIsForwardedToLocalizationPose) {
