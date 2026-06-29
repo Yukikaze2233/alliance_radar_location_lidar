@@ -6,9 +6,9 @@ namespace radar::fusion {
 
 KalmanTracker::KalmanTracker(int track_id) { state_.track_id = track_id; }
 
-void KalmanTracker::predict(int64_t now_ns) {
+auto KalmanTracker::predict(int64_t now_ns) -> bool {
+    if (now_ns < state_.last_update_ns) return false;
     double dt = static_cast<double>(now_ns - state_.last_update_ns) / 1e9;
-    if (dt < 0) dt = 0;
 
     // 状态转移矩阵 F = [[1,0,dt,0],[0,1,0,dt],[0,0,1,0],[0,0,0,1]]
     Eigen::Matrix4d F = Eigen::Matrix4d::Identity();
@@ -31,6 +31,7 @@ void KalmanTracker::predict(int64_t now_ns) {
     Q(3, 3)           = q2 * dt;
 
     state_.P = F * state_.P * F.transpose() + Q;
+    return true;
 }
 
 void KalmanTracker::update(const Eigen::Vector2d& measurement, int64_t now_ns) {

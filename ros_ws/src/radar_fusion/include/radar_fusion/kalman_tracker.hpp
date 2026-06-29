@@ -13,6 +13,7 @@ struct KalmanState {
     Eigen::Vector4d x = Eigen::Vector4d::Zero();
     Eigen::Matrix4d P = Eigen::Matrix4d::Identity();
 
+    /// ROS message timestamp (ns from msg->header.stamp). Used for dt calculation and staleness.
     int64_t last_update_ns = 0;
     int track_id           = -1;
     int hit_count          = 0;
@@ -30,10 +31,11 @@ class KalmanTracker {
 public:
     explicit KalmanTracker(int track_id);
 
-    /// 预测到指定时间
-    void predict(int64_t now_ns);
+    /// Predict state to the given ROS message time (ns from msg->header.stamp).
+    /// No-op when now_ns is before last_update_ns.
+    auto predict(int64_t now_ns) -> bool;
 
-    /// 用观测更新
+    /// Update state with a measurement at the given ROS message time.
     void update(const Eigen::Vector2d& measurement, int64_t now_ns);
 
     [[nodiscard]] auto distance_squared_to(const Eigen::Vector2d& measurement) const -> double;

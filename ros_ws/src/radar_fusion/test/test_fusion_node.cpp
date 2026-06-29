@@ -133,7 +133,7 @@ protected:
             lock, timeout, [&]() { return track_publish_count_ >= expected_publish_count; });
     }
 
-    auto make_cluster_msg(double x, double y, double z, uint32_t nanosec)
+    auto make_cluster_msg(double x, double y, double z, int32_t sec, uint32_t nanosec)
         -> sensor_msgs::msg::PointCloud2 {
         pcl::PointCloud<pcl::PointXYZ> cloud;
         cloud.emplace_back(static_cast<float>(x), static_cast<float>(y), static_cast<float>(z));
@@ -143,7 +143,7 @@ protected:
 
         sensor_msgs::msg::PointCloud2 msg;
         pcl::toROSMsg(cloud, msg);
-        msg.header.stamp.sec     = 0;
+        msg.header.stamp.sec     = sec;
         msg.header.stamp.nanosec = nanosec;
         msg.header.frame_id      = "map";
         return msg;
@@ -170,18 +170,18 @@ protected:
 }
 
 TEST_F(FusionNodeTest, ClusterOnlyInputDoesNotPublishLocalizationPose) {
-    auto cluster_msg = make_cluster_msg(1.0, 2.0, 0.0, 123456789u);
+    auto cluster_msg = make_cluster_msg(1.0, 2.0, 0.0, 0, 123456789u);
     cluster_pub_->publish(cluster_msg);
 
     EXPECT_FALSE(wait_for_pose_count(1, 300ms));
 }
 
 TEST_F(FusionNodeTest, ClusterTrackingUsesMessageTimeInsteadOfWallTime) {
-    cluster_pub_->publish(make_cluster_msg(0.0, 0.0, 0.0, 0u));
+    cluster_pub_->publish(make_cluster_msg(0.0, 0.0, 0.0, 0, 0u));
     std::this_thread::sleep_for(1000ms);
-    cluster_pub_->publish(make_cluster_msg(0.8, 0.0, 0.0, 1000000000u));
+    cluster_pub_->publish(make_cluster_msg(0.8, 0.0, 0.0, 1, 0u));
     std::this_thread::sleep_for(1000ms);
-    cluster_pub_->publish(make_cluster_msg(1.6, 0.0, 0.0, 2000000000u));
+    cluster_pub_->publish(make_cluster_msg(1.6, 0.0, 0.0, 2, 0u));
 
     ASSERT_TRUE(wait_for_track_marker_count(3, 500ms));
 
@@ -192,7 +192,7 @@ TEST_F(FusionNodeTest, ClusterTrackingUsesMessageTimeInsteadOfWallTime) {
     }
 
     std::this_thread::sleep_for(1700ms);
-    cluster_pub_->publish(make_cluster_msg(1.68, 0.0, 0.0, 2100000000u));
+    cluster_pub_->publish(make_cluster_msg(1.68, 0.0, 0.0, 2, 100000000u));
 
     ASSERT_TRUE(wait_for_track_publish_count(1, 500ms));
 
