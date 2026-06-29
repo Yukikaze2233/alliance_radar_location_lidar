@@ -33,7 +33,8 @@ void KalmanTracker::predict(int64_t now_ns) {
     state_.P = F * state_.P * F.transpose() + Q;
 }
 
-void KalmanTracker::update(const Eigen::Vector2d& measurement, int64_t now_ns) {
+void KalmanTracker::update(
+    const Eigen::Vector2d& measurement, int64_t now_ns, int min_hits_to_confirm) {
     // 观测矩阵 H = [[1,0,0,0],[0,1,0,0]]
     Eigen::Matrix<double, 2, 4> H = Eigen::Matrix<double, 2, 4>::Zero();
     H(0, 0)                       = 1.0;
@@ -51,6 +52,17 @@ void KalmanTracker::update(const Eigen::Vector2d& measurement, int64_t now_ns) {
     state_.last_update_ns = now_ns;
     state_.hit_count++;
     state_.miss_count = 0;
+    if (state_.hit_count >= min_hits_to_confirm) {
+        state_.lifecycle = TrackLifecycle::Confirmed;
+    }
+}
+
+void KalmanTracker::mark_missed(int max_misses_before_delete) {
+    state_.miss_count++;
+    if (state_.lifecycle == TrackLifecycle::Tentative ||
+        state_.miss_count >= max_misses_before_delete) {
+        state_.lifecycle = TrackLifecycle::Deleted;
+    }
 }
 
 auto KalmanTracker::distance_squared_to(const Eigen::Vector2d& measurement) const -> double {
